@@ -1,0 +1,5 @@
+node_names: ["listener", "talker"]
+node_eval_mode:  [["cpu","mem"], ["cpu","mem"]]
+
+ext_eval: ["topic_bw"]
+topics: ["/chatter"]
