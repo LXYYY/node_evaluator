@@ -1,66 +1,22 @@
 #!/usr/bin/env python
 
-import rospy, rosnode, rosgraph, rostopic
-import re, time, glog, threading
-import evaluator
+import rospy
+import rosnode
+import rosgraph
+import re
+import time
+import glog
+import threading
+import evaluator as evaluator
+import eval_plotting as plotting
 
 ID = '/rosnode'
 
 
-@evaluator.EvaluatorFactory.register('topic_bw')
-class TopicBwEvaluator(evaluator.EvaluatorBase):
-    class ROSTopicBandwidth(rostopic.ROSTopicBandwidth):
-        def __init__(self, window_size=100):
-            super(TopicBwEvaluator.ROSTopicBandwidth,
-                  self).__init__(window_size=window_size)
-            self.times.append(time.time())
-            self.sizes.append(0)
-
-        def get_bw(self):
-            if len(self.times) < 2:
-                return None
-            with self.lock:
-                n = len(self.times)
-                tn = time.time()
-                t0 = self.times[0]
-
-                total = sum(self.sizes)
-                bytes_per_s = total / (tn - t0)
-                mean = total / n
-
-                # min and max
-                max_s = max(self.sizes)
-                min_s = min(self.sizes)
-
-                bd_stat = {}
-                bd_stat['bytes_per_s'] = bytes_per_s
-                bd_stat['mean'] = mean
-                bd_stat['min_s'] = min_s
-                bd_stat['max_s'] = max_s
-                return bd_stat
-
-    def __init__(self, **kwargs):
-        super(TopicBwEvaluator, self).__init__(**kwargs)
-        self.eval_mode = 'topic_bw'
-        self.topics = kwargs['topics']
-        self.rt = {}
-        self.sub = {}
-        for topic in self.topics:
-            rt = TopicBwEvaluator.ROSTopicBandwidth(10)
-            self.sub[topic] = rospy.Subscriber(topic, rospy.AnyMsg,
-                                               rt.callback)
-            self.rt[topic] = rt
-            self.eval_stat[topic] = []
-            print('Start %s evaluation on topic %s' % (self.eval_mode, topic))
-
-    def eval(self):
-        for topic in self.topics:
-            self.eval_stat[topic].append(self.rt[topic].get_bw())
-            print(self.rt[topic].get_bw())
-
-
 class Evaluator:
     def __init__(self):
+        self.node_eval_threads = {}
+        self.topic_eval_threads = {}
         self.eval_rate_s = rospy.get_param('~eval_rate_s', default=0.5)
 
         self.node_names = rospy.get_param('~node_names')
@@ -73,18 +29,23 @@ class Evaluator:
             self.eval_mode = {}
             for name, mode in zip(self.node_names, node_eval_mode):
                 self.eval_mode[name] = mode
+            for node_name in self.node_names:
+                self.node_eval_threads[node_name] = {}
+        self.plot_dir = rospy.get_param('~plot_dir', '.')
 
-        self.ext_eval = rospy.get_param('~ext_eval')
-        if 'topic_bw' in self.ext_eval:
-            self.topics = rospy.get_param('~topics')
+        self.topic_names = rospy.get_param('~topic_names', default=None)
+        topic_eval_mode = rospy.get_param('~topic_eval_mode', default=None)
+        if self.topic_names is not None or self.topic_names is not None:
+            glog.check_eq(len(self.topic_names), len(topic_eval_mode))
+            self.topic_eval_mode = {}
+            for name, mode in zip(self.topic_names, topic_eval_mode):
+                self.topic_eval_mode[name] = mode
+            for topic in self.topic_names:
+                self.topic_eval_threads[topic] = {}
 
         self.master = rosgraph.Master(ID)
         self.node_pid = {}
-        self.node_eval_threads = {}
-        self.ext_eval_threads = {}
-        for node_name in self.node_names:
-            self.node_eval_threads[node_name] = {}
-
+        self.plot_threads = {}
         self.start_eval()
 
     def start_eval(self):
@@ -123,32 +84,67 @@ class Evaluator:
 
         rospy.on_shutdown(self.stop_threads)
 
-    def _start_eval_threads(self):
-        for node_name in self.node_names:
-            for eval_mode in self.eval_mode[node_name]:
-                eval_thread = evaluator.EvaluatorFactory.create_evaluator(
-                    eval_mode,
-                    node_name=node_name,
-                    node_pid=self.node_pid[node_name],
-                    eval_rate_s=self.eval_rate_s)
-                eval_thread.start()
-                self.node_eval_threads[node_name][eval_mode] = eval_thread
+        self._plot_loop()
 
-        for ext_eval_name in self.ext_eval:
-            ext_eval_thread = evaluator.EvaluatorFactory.create_evaluator(
-                ext_eval_name,
-                topics=self.topics,
-                eval_rate_s=self.eval_rate_s)
-            ext_eval_thread.start()
-            self.ext_eval_threads[ext_eval_name] = ext_eval_thread
+    def _start_eval_threads(self):
+        if self.node_names is not None:
+            for node_name in self.node_names:
+                for eval_mode in self.eval_mode[node_name]:
+                    eval_thread = evaluator.EvaluatorFactory.create_evaluator(
+                        eval_mode,
+                        node_name=node_name,
+                        node_pid=self.node_pid[node_name],
+                        eval_rate_s=self.eval_rate_s)
+                    eval_thread.start()
+                    self.node_eval_threads[node_name][eval_mode] = eval_thread
+
+                    if eval_mode not in self.plot_threads:
+                        self.plot_threads[eval_mode] = plotting.PlottingFactory.create_plotting(
+                            eval_mode, plot_dir=self.plot_dir, plot_rate_s=1.0)
+                    self.plot_threads[eval_mode].add_stat_update_callback(
+                        eval_thread.get_eval_stat)
+
+        if self.topic_names is not None:
+            for topic in self.topic_names:
+                for eval_mode in self.topic_eval_mode[topic]:
+                    eval_thread = evaluator.EvaluatorFactory.create_evaluator(
+                        eval_mode,
+                        topic=topic,
+                        eval_rate_s=self.eval_rate_s)
+                    eval_thread.start()
+                    self.topic_eval_threads[topic][eval_mode] = eval_thread
+
+                    if eval_mode not in self.plot_threads:
+                        self.plot_threads[eval_mode] = plotting.PlottingFactory.create_plotting(
+                            eval_mode, plot_dir=self.plot_dir, plot_rate_s=1.0)
+                    self.plot_threads[eval_mode].add_stat_update_callback(
+                        eval_thread.get_eval_stat)
+
+        for plot_mode in self.plot_threads:
+            self.plot_threads[plot_mode].start()
+
+    def _plot_loop(self):
+        start_time = time.time()
+        while not rospy.is_shutdown():
+            for plot_mode in self.plot_threads:
+                print('plotting %s' % plot_mode)
+                self.plot_threads[plot_mode].plot()
+                time_to_sleep = start_time + self.eval_rate_s - time.time()
+                if time_to_sleep > 0:
+                    time.sleep(time_to_sleep)
+                start_time = time.time()
 
     def stop_threads(self):
         for node_name in self.node_names:
             for eval_mode in self.eval_mode[node_name]:
                 self.node_eval_threads[node_name][eval_mode].stop()
 
-        for thread in self.ext_eval_threads:
-            self.ext_eval_threads[thread].stop()
+        for topic in self.topic_eval_threads:
+            for eval_mode in self.topic_eval_threads[topic]:
+                self.topic_eval_threads[topic][eval_mode].stop()
+
+        for key in self.plot_threads:
+            self.plot_threads[key].stop()
 
 
 if __name__ == "__main__":
