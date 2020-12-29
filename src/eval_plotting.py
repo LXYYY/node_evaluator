@@ -1,3 +1,5 @@
+from os import mkdir, path
+from matplotlib import pyplot as plt
 import csv
 import datetime
 import os
@@ -9,8 +11,6 @@ import numpy as np
 import rospy
 import shutil
 import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
 
 
 COLOR_MAP = ['r-', 'g-', 'b-', 'c-', 'm-', 'y-']
@@ -105,7 +105,7 @@ class CPUPlotting(PlottingBase):
     def _plot(self):
         x = {}
         y = {}
-        curve_names=[]
+        curve_names = []
         for key in self.eval_stat:
             with self.stat_update_lock:
                 x[key] = np.array(self.eval_stat[key]['time'])
@@ -128,7 +128,7 @@ class MemPlotting(PlottingBase):
     def _plot(self):
         x = {}
         y = {}
-        curve_names=[]
+        curve_names = []
         for key in self.eval_stat:
             with self.stat_update_lock:
                 x[key] = np.array(self.eval_stat[key]['time'])
@@ -151,7 +151,7 @@ class TopicBwPlotting(PlottingBase):
     def _plot(self):
         x = {}
         y = {}
-        curve_names=[]
+        curve_names = []
         if len(self.eval_stat) == 0:
             return
         for key in self.eval_stat:

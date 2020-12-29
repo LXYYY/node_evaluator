@@ -2,9 +2,12 @@
 <launch>
 
 <arg name="config_file"/>
+<arg name="record_bag" default="true"/>
 
   <node pkg="node_evaluator" type="evaluator_ros.py" name="evaluator_ros" output="screen">
     <rosparam file="$(arg config_file)" command="load" />
   </node>
+
+  <node pkg="rosbag" type="record" name="eval_data_recorder" args="-o eval_data /firefly_1/vins_estimator_1/odometry /firefly_0/vins_estimator_0/odometry /tf" />
 
 </launch>

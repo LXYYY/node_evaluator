@@ -6,6 +6,7 @@ import rosgraph
 import re
 import time
 import glog
+import os
 import threading
 import evaluator as evaluator
 import eval_plotting as plotting
@@ -31,7 +32,11 @@ class Evaluator:
                 self.eval_mode[name] = mode
             for node_name in self.node_names:
                 self.node_eval_threads[node_name] = {}
-        self.plot_dir = rospy.get_param('~plot_dir', '.')
+        self.plot_dir = os.path.join(rospy.get_param(
+            '~plot_dir', '.'), str(rospy.get_time()))
+        if not os.path.exists(self.plot_dir):
+            os.mkdir(self.plot_dir)
+        print("Saving results to "+self.plot_dir)
 
         self.topic_names = rospy.get_param('~topic_names', default=None)
         topic_eval_mode = rospy.get_param('~topic_eval_mode', default=None)
@@ -65,8 +70,16 @@ class Evaluator:
 
                 rospy.loginfo('Looking for pid of node %s' % node_name)
                 node_api = rosnode.get_api_uri(self.master, node_name)
-                node_con_info = rosnode.get_node_connection_info_description(
-                    node_api, self.master)
+                while True:
+                    try:
+                        node_con_info = rosnode.get_node_connection_info_description(
+                            node_api, self.master)
+                    except rosnode.ROSNodeIOException as e:
+                        time.sleep(0.1)
+                        rospy.loginfo_throttle(1, e)
+                        continue
+                    else:
+                        break
                 pid_match = re.search('Pid: (\d+)', node_con_info)
                 if pid_match is None:
                     rospy.logwarn('Not found pid in description of node %s' %
