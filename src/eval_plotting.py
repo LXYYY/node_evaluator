@@ -13,7 +13,7 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 
-COLOR_MAP = ['r-', 'g-', 'b-']
+COLOR_MAP = ['r-', 'g-', 'b-', 'c-', 'm-', 'y-']
 
 
 class PlottingFactory(object):
@@ -105,15 +105,17 @@ class CPUPlotting(PlottingBase):
     def _plot(self):
         x = {}
         y = {}
+        curve_names=[]
         for key in self.eval_stat:
             with self.stat_update_lock:
                 x[key] = np.array(self.eval_stat[key]['time'])
                 y[key] = np.array(self.eval_stat[key][key])
             plt.plot(x[key], y[key], self.color_map[key])
+            curve_names.append(key)
         plt.title('CPU Usage')
         plt.xlabel('time(s)')
         plt.ylabel('cpu usage(%)')
-        plt.legend()
+        plt.legend(curve_names, loc='upper left', fancybox=True)
         plt.savefig(os.path.join(self.plot_dir, '%s.png' % self.plot_mode))
 
 
@@ -126,16 +128,17 @@ class MemPlotting(PlottingBase):
     def _plot(self):
         x = {}
         y = {}
+        curve_names=[]
         for key in self.eval_stat:
             with self.stat_update_lock:
                 x[key] = np.array(self.eval_stat[key]['time'])
                 y[key] = np.array(self.eval_stat[key][key])
             plt.plot(x[key], y[key], self.color_map[key])
-
+            curve_names.append(key)
         plt.title('Memory Usage')
         plt.xlabel('time(s)')
         plt.ylabel('memory usage(%)')
-        plt.legend()
+        plt.legend(curve_names, loc='upper left', fancybox=True)
         plt.savefig(os.path.join(self.plot_dir, '%s.png' % self.plot_mode))
 
 
@@ -148,6 +151,7 @@ class TopicBwPlotting(PlottingBase):
     def _plot(self):
         x = {}
         y = {}
+        curve_names=[]
         if len(self.eval_stat) == 0:
             return
         for key in self.eval_stat:
@@ -155,9 +159,9 @@ class TopicBwPlotting(PlottingBase):
                 x[key] = np.array(self.eval_stat[key]['time'])
                 y[key] = np.array(self.eval_stat[key][key])
             plt.plot(x[key], y[key], self.color_map[key])
-
+            curve_names.append(key)
         plt.title('Topic Bandwidth')
         plt.xlabel('time(s)')
         plt.ylabel('topic bandwith(B/s)')
-        plt.legend()
+        plt.legend(curve_names, loc='upper left', fancybox=True)
         plt.savefig(os.path.join(self.plot_dir, '%s.png' % self.plot_mode))

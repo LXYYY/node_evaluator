@@ -127,7 +127,6 @@ class Evaluator:
         start_time = time.time()
         while not rospy.is_shutdown():
             for plot_mode in self.plot_threads:
-                print('plotting %s' % plot_mode)
                 self.plot_threads[plot_mode].plot()
                 time_to_sleep = start_time + self.eval_rate_s - time.time()
                 if time_to_sleep > 0:

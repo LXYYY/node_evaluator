@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+
+<arg name="config_file"/>
+
+  <node pkg="node_evaluator" type="evaluator_ros.py" name="evaluator_ros" output="screen">
+    <rosparam file="$(arg config_file)" command="load" />
+  </node>
+
+</launch>
