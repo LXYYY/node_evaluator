@@ -1,6 +1,8 @@
-import evaluator as evaluator
+from . import evaluator as evaluator
 import rostopic
 import rospy
+import time
+from node_evaluator.msg import BandwidthMsg
 
 
 @evaluator.EvaluatorFactory.register('topic_bw')
@@ -56,3 +58,23 @@ class TopicBwEvaluator(evaluator.EvaluatorBase):
             return True
         else:
             return False
+
+
+@evaluator.EvaluatorFactory.register('bw_from_msg')
+class BwFromMsgEvaluator(evaluator.EvaluatorBase):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.eval_mode = 'bw_from_msg'
+        self.topic = kwargs['bw_topic']
+        self.sub = rospy.Subscriber(
+            self.topic, BandwidthMsg, self._bw_callback)
+
+    def _bw_callback(self, data):
+        self.eval_stat['time'].append(data.time[0])
+        self.eval_stat[data.name].append(data.size/(data.time[1]-data.time[0]))
+        self.eval_stat['time'].append(data.time[1])
+        self.eval_stat[data.name].append(data.size/(data.time[1]-data.time[0]))
+
+    def eval(self):
+        # return false to stop base class to add now() to time list
+        return False

@@ -1,16 +1,8 @@
-from os import mkdir, path
 from matplotlib import pyplot as plt
-import csv
-import datetime
 import os
-import re
-import sys
-import time
+import csv
 import threading
 import numpy as np
-import rospy
-import shutil
-import matplotlib
 
 
 COLOR_MAP = ['r-', 'g-', 'b-', 'c-', 'm-', 'y-']
@@ -94,6 +86,10 @@ class PlottingBase(threading.Thread):
 
     def stop(self):
         self.term_event.set()
+        with open(os.path.join(self.plot_dir, self.plot_mode+".csv"),"w") as csv_file:
+            writer=csv.writer(csv_file)
+            for k,v in self.eval_stat.items():
+                writer.writerow([k, v])
 
 
 @PlottingFactory.register('cpu')

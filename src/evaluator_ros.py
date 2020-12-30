@@ -7,9 +7,8 @@ import re
 import time
 import glog
 import os
-import threading
-import evaluator as evaluator
-import eval_plotting as plotting
+from . import evaluator as evaluator
+from . import eval_plotting as plotting
 
 ID = '/rosnode'
 
