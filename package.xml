@@ -13,6 +13,7 @@
 
   <depend>rospy</depend>
   <depend>rospy_tutorials</depend>
-  <depend>active_3d_planning_app_reconstruction</depend>
+  <depend>message_generation</depend>
+  <depend>message_runtime</depend>
 
 </package>
