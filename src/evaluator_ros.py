@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
+from logging import INFO
+import sys
 import rospy
 import rosnode
 import rosgraph
 import re
 import time
-import glog
+import glog 
 import os
 import evaluator as evaluator
 import eval_plotting as plotting
@@ -46,6 +48,9 @@ class Evaluator:
                 self.topic_eval_mode[name] = mode
             for topic in self.topic_names:
                 self.topic_eval_threads[topic] = {}
+
+        self.sys_eval_mode = rospy.get_param('~sys_eval_mode', default=None)
+        self.sys_eval_threads = {}
 
         self.master = rosgraph.Master(ID)
         self.node_pid = {}
@@ -109,12 +114,7 @@ class Evaluator:
                         eval_rate_s=self.eval_rate_s)
                     eval_thread.start()
                     self.node_eval_threads[node_name][eval_mode] = eval_thread
-
-                    if eval_mode not in self.plot_threads:
-                        self.plot_threads[eval_mode] = plotting.PlottingFactory.create_plotting(
-                            eval_mode, plot_dir=self.plot_dir, plot_rate_s=1.0)
-                    self.plot_threads[eval_mode].add_stat_update_callback(
-                        eval_thread.get_eval_stat)
+                    self._add_to_plotting(eval_mode, eval_thread)
 
         if self.topic_names is not None:
             for topic in self.topic_names:
@@ -125,15 +125,28 @@ class Evaluator:
                         eval_rate_s=self.eval_rate_s)
                     eval_thread.start()
                     self.topic_eval_threads[topic][eval_mode] = eval_thread
+                    self._add_to_plotting(eval_mode, eval_thread)
 
-                    if eval_mode not in self.plot_threads:
-                        self.plot_threads[eval_mode] = plotting.PlottingFactory.create_plotting(
-                            eval_mode, plot_dir=self.plot_dir, plot_rate_s=1.0)
-                    self.plot_threads[eval_mode].add_stat_update_callback(
-                        eval_thread.get_eval_stat)
+        if self.sys_eval_mode is not None:
+            for eval_mode in self.sys_eval_mode:
+                eval_thread = evaluator.EvaluatorFactory.create_evaluator(
+                    eval_mode,
+                    eval_rate_s=self.eval_rate_s)
+                eval_thread.start()
+                self.sys_eval_threads[eval_mode] = eval_thread
+                self._add_to_plotting(eval_mode, eval_thread)
 
         for plot_mode in self.plot_threads:
             self.plot_threads[plot_mode].start()
+
+    def _add_to_plotting(self, eval_mode, eval_thread):
+        if eval_mode == 'sys_bw':
+            eval_mode = 'topic_bw'
+        if eval_mode not in self.plot_threads:
+            self.plot_threads[eval_mode] = plotting.PlottingFactory.create_plotting(
+                eval_mode, plot_dir=self.plot_dir, plot_rate_s=1.0)
+        self.plot_threads[eval_mode].add_stat_update_callback(
+            eval_thread.get_eval_stat)
 
     def _plot_loop(self):
         start_time = time.time()

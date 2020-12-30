@@ -2,6 +2,7 @@ from matplotlib import pyplot as plt
 import os
 import csv
 import threading
+from glog import logging
 import numpy as np
 
 
@@ -51,10 +52,10 @@ class PlottingBase(threading.Thread):
         self.stat_update_callback.append(stat_cb)
 
     def run(self):
-        print('Start %s plotting' % self.plot_mode)
+        logging.info('Start %s plotting' % self.plot_mode)
         threading.Timer(self.plot_rate_s, self._stat_update_loop).start()
         self.term_event.wait()
-        print('%s plotting stopped' % self.plot_mode)
+        logging.info('%s plotting stopped' % self.plot_mode)
 
     def _plot_loop(self):
         if not self.term_event.is_set():
@@ -82,7 +83,6 @@ class PlottingBase(threading.Thread):
                     self.eval_stat[key] = new_stat
                     if key not in self.color_map:
                         self.color_map[key] = COLOR_MAP[len(self.eval_stat)-1]
-                    break
 
     def stop(self):
         self.term_event.set()
@@ -156,8 +156,8 @@ class TopicBwPlotting(PlottingBase):
                 y[key] = np.array(self.eval_stat[key][key])
             plt.plot(x[key], y[key], self.color_map[key])
             curve_names.append(key)
-        plt.title('Topic Bandwidth')
+        plt.title('Bandwidth')
         plt.xlabel('time(s)')
-        plt.ylabel('topic bandwith(B/s)')
+        plt.ylabel('bandwith(MB/s)')
         plt.legend(curve_names, loc='upper left', fancybox=True)
         plt.savefig(os.path.join(self.plot_dir, '%s.png' % self.plot_mode))

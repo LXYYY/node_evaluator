@@ -3,6 +3,8 @@ import time
 import psutil
 import rostopic
 import rospy
+from glog import logging
+from node_evaluator.msg import Bandwidth as BandwidthMsg
 
 
 class EvaluatorFactory:
@@ -169,7 +171,57 @@ class TopicBwEvaluator(TopicEvaluatorBase):
     def eval(self):
         new_bw = self.rt.get_bw()
         if new_bw is not None:
-            self.eval_stat[self.topic].append(new_bw['bytes_per_s'])
+            self.eval_stat[self.topic].append(new_bw['bytes_per_s']/1000000)
             return True
         else:
             return False
+
+
+@EvaluatorFactory.register('bw_from_msg')
+class BwFromMsgEvaluator(EvaluatorBase):
+    def __init__(self, **kwargs):
+        super(BwFromMsgEvaluator, self).__init__(**kwargs)
+        self.eval_mode = 'bw_from_msg'
+        self.topic = kwargs['bw_topic']
+        self.sub = rospy.Subscriber(
+            self.topic, BandwidthMsg, self._bw_callback)
+
+    def _bw_callback(self, data):
+        self.eval_stat['time'].append(data.time[0])
+        self.eval_stat[data.name].append(data.size/(data.time[1]-data.time[0]))
+        self.eval_stat['time'].append(data.time[1])
+        self.eval_stat[data.name].append(data.size/(data.time[1]-data.time[0]))
+
+    def eval(self):
+        # return false to stop base class to add now() to time list
+        return False
+
+
+@EvaluatorFactory.register('sys_bw')
+class SysBwEvaluator(EvaluatorBase):
+    def __init__(self, **kwargs):
+        super(SysBwEvaluator, self).__init__(**kwargs)
+        self.eval_mode = 'sys_bw'
+        self.eval_stat['total_recv'] = []
+        self.eval_stat['total_sent'] = []
+        self.old_recv = 0
+        self.old_sent = 0
+
+    def print_start(self):
+        print("Start %s evaluation" % self.eval_mode)
+
+    def eval(self):
+        result = True
+        new_recv = psutil.net_io_counters().bytes_recv
+        new_sent = psutil.net_io_counters().bytes_sent
+        if self.old_recv == 0 or self.old_sent == 0:
+            result = False
+        else:
+            self.eval_stat['total_recv'].append(
+                (new_recv-self.old_recv)/(self.eval_rate_s*1000000))
+            self.eval_stat['total_sent'].append(
+                (new_sent-self.old_sent)/(self.eval_rate_s*1000000))
+            result = True
+        self.old_recv = new_recv
+        self.old_sent = new_sent
+        return result
