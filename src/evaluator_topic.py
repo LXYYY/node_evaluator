@@ -1,4 +1,4 @@
-from . import evaluator as evaluator
+import evaluator as evaluator
 import rostopic
 import rospy
 import time
@@ -8,7 +8,7 @@ from node_evaluator.msg import BandwidthMsg
 @evaluator.EvaluatorFactory.register('topic_bw')
 class TopicBwEvaluator(evaluator.EvaluatorBase):
     class ROSTopicBandwidth(rostopic.ROSTopicBandwidth):
-        def __init__(self, window_size=2):
+        def __init__(self, window_size=10):
             super(TopicBwEvaluator.ROSTopicBandwidth,
                   self).__init__(window_size=window_size)
             self.times.append(time.time())
