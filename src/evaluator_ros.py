@@ -7,10 +7,12 @@ import rosnode
 import rosgraph
 import re
 import time
-import glog 
+import datetime
+import glog
 import os
 import evaluator as evaluator
 import eval_plotting as plotting
+
 
 ID = '/rosnode'
 
@@ -33,8 +35,8 @@ class Evaluator:
                 self.eval_mode[name] = mode
             for node_name in self.node_names:
                 self.node_eval_threads[node_name] = {}
-        self.plot_dir = os.path.join(rospy.get_param(
-            '~plot_dir', '.'), str(rospy.get_time()))
+        self.plot_dir = os.path.join(rospy.get_param('~plot_dir', '.'), datetime.datetime.now().strftime(
+            '%x').replace('/', '-')+'-'+datetime.datetime.now().strftime('%X').replace(':', '-'))
         if not os.path.exists(self.plot_dir):
             os.mkdir(self.plot_dir)
         print("Saving results to "+self.plot_dir)
@@ -140,7 +142,7 @@ class Evaluator:
             self.plot_threads[plot_mode].start()
 
     def _add_to_plotting(self, eval_mode, eval_thread):
-        if eval_mode == 'sys_bw':
+        if eval_mode == 'sys_bw' or eval_mode == 'bw_from_msg':
             eval_mode = 'topic_bw'
         if eval_mode not in self.plot_threads:
             self.plot_threads[eval_mode] = plotting.PlottingFactory.create_plotting(

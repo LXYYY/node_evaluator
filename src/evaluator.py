@@ -130,7 +130,7 @@ class TopicEvaluatorBase(EvaluatorBase):
 @EvaluatorFactory.register('topic_bw')
 class TopicBwEvaluator(TopicEvaluatorBase):
     class ROSTopicBandwidth(rostopic.ROSTopicBandwidth):
-        def __init__(self, window_size=2):
+        def __init__(self, window_size=100):
             super(TopicBwEvaluator.ROSTopicBandwidth,
                   self).__init__(window_size=window_size)
             self.times.append(time.time())
@@ -182,17 +182,59 @@ class BwFromMsgEvaluator(EvaluatorBase):
     def __init__(self, **kwargs):
         super(BwFromMsgEvaluator, self).__init__(**kwargs)
         self.eval_mode = 'bw_from_msg'
-        self.topic = kwargs['bw_topic']
+        self.topic = kwargs['topic']
         self.sub = rospy.Subscriber(
             self.topic, BandwidthMsg, self._bw_callback)
+        self.eval_stat = {}
+        self.tmp_eval_stat = {}
+        self.data_lock = threading.Lock()
+
+    def print_start(self):
+        print('Start to receive bandwidth msg in topic %s' % self.topic)
 
     def _bw_callback(self, data):
-        self.eval_stat['time'].append(data.time[0])
-        self.eval_stat[data.name].append(data.size/(data.time[1]-data.time[0]))
-        self.eval_stat['time'].append(data.time[1])
-        self.eval_stat[data.name].append(data.size/(data.time[1]-data.time[0]))
+        with self.data_lock:
+            if data.name not in self.eval_stat:
+                self.eval_stat[data.name] = {}
+                self.eval_stat[data.name]['time'] = []
+                self.eval_stat[data.name][data.name] = []
+                self.tmp_eval_stat[data.name] = {}
+                self.tmp_eval_stat[data.name]['time'] = []
+                self.tmp_eval_stat[data.name][data.name] = []
+            self.tmp_eval_stat[data.name]['time'].append(data.time[1].to_sec())
+            self.tmp_eval_stat[data.name][data.name].append(
+                data.size/1000000.0)
+
+    def get_bw(self, name):
+        if len(self.tmp_eval_stat[name]['time']) < 2:
+            return None
+        with self.data_lock:
+            n = len(self.tmp_eval_stat[name]['time'])
+            tn = time.time()
+            t0 = self.tmp_eval_stat[name]['time'][0]
+
+            total = sum(self.tmp_eval_stat[name][name])
+            bytes_per_s = total / (tn - t0)
+            mean = total / n
+
+            # min and max
+            max_s = max(self.tmp_eval_stat[name][name])
+            min_s = min(self.tmp_eval_stat[name][name])
+
+            bd_stat = {}
+            bd_stat['bytes_per_s'] = bytes_per_s
+            bd_stat['mean'] = mean
+            bd_stat['min_s'] = min_s
+            bd_stat['max_s'] = max_s
+            return bd_stat
 
     def eval(self):
+        for name in self.eval_stat:
+            new_bw = self.get_bw(name)
+            if new_bw is not None:
+                self.eval_stat[name][name].append(
+                    new_bw['bytes_per_s'])
+                self.eval_stat[name]['time'].append(time.time())
         # return false to stop base class to add now() to time list
         return False
 
@@ -208,12 +250,12 @@ class SysBwEvaluator(EvaluatorBase):
         self.old_sent = 0
 
     def print_start(self):
-        print("Start %s evaluation" % self.eval_mode)
+        print('Start %s evaluation' % self.eval_mode)
 
     def eval(self):
         result = True
-        new_recv = psutil.net_io_counters().bytes_recv
-        new_sent = psutil.net_io_counters().bytes_sent
+        new_recv = psutil.net_io_counters(pernic=True)['eth0'][0]
+        new_sent = psutil.net_io_counters(pernic=True)['eth0'][1]
         if self.old_recv == 0 or self.old_sent == 0:
             result = False
         else:

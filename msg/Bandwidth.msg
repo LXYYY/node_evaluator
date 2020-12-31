@@ -1,3 +1,3 @@
 string name
-float32 size
+uint64 size
 time[2] time

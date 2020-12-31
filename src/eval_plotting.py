@@ -79,16 +79,20 @@ class PlottingBase(threading.Thread):
         for update in self.stat_update_callback:
             new_stat = update()
             for key in new_stat:
-                if key is not 'time':
-                    self.eval_stat[key] = new_stat
-                    if key not in self.color_map:
-                        self.color_map[key] = COLOR_MAP[len(self.eval_stat)-1]
+                if 'time' in new_stat:
+                    if key is not 'time' and len(new_stat[key]) > 0:
+                        self.eval_stat[key] = new_stat
+                else:
+                    if len(new_stat[key][key]) > 0:
+                        self.eval_stat[key] = new_stat[key]
+                if key not in self.color_map and key is not 'time':
+                    self.color_map[key] = COLOR_MAP[len(self.eval_stat)-1]
 
     def stop(self):
         self.term_event.set()
-        with open(os.path.join(self.plot_dir, self.plot_mode+".csv"),"w") as csv_file:
-            writer=csv.writer(csv_file)
-            for k,v in self.eval_stat.items():
+        with open(os.path.join(self.plot_dir, self.plot_mode+".csv"), "w") as csv_file:
+            writer = csv.writer(csv_file)
+            for k, v in self.eval_stat.items():
                 writer.writerow([k, v])
 
 
